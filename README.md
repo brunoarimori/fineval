@@ -39,6 +39,7 @@ a CONST_LINE with a MARK used to be a VAR_LINE before the last fineval process
 a RESULT with a CONST_VALUE is a CONST_RESULT
 a RESULT with a RESULT_VALUE is an UNPARSED_RESULT
 a MARK necessarily maps to a LABEL, a VAR_LINE always maps to a RESULT
+a LABEL can map to multiple MARKs
 the number of lines is the same after a fineval process
 
 # routine
@@ -108,3 +109,7 @@ https://www.cs.usfca.edu/~galles/visualization/DFS.html
 see if tarjan instead of DFS is better (for small and large files)
 see if you can apply concurrency to speed up parsing
 use debugging tools
+
+# Project
+https://github.com/users/brunoarimori/projects/2
+
