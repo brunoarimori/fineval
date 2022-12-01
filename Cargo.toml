@@ -2,3 +2,5 @@
 name = "fineval"
 version = "0.1.0"
 [dependencies]
+regex = "1"
+once_cell = "1"
