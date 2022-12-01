@@ -55,16 +55,14 @@ pub struct Fin {
 }
 
 pub trait Evaluator {
-  fn new(all_items: Vec<Item>) -> Self;
+  fn new() -> Self;
   fn evaluate(item: &mut Item);
   fn traverse(&mut self);
 }
 
 impl Evaluator for Fin {
-
-  // temporary
-  fn new(all_items: Vec<Item>) -> Self {
-    Fin { all_items, evaluated: vec![], current_section: Option::None }
+  fn new() -> Self {
+    Fin { all_items: vec![], evaluated: vec![], current_section: Option::None }
   }
 
   fn evaluate(item: &mut Item) {
@@ -217,8 +215,6 @@ impl FileHandler for Fin {
       return;
     }
 
-    // let regex_item_entry: &regex::Regex = regex!(r"(?x)[+-]([0-9,]+)\ ([a-z]+$)");
-
     let mut value: Option<i128> = Option::None;
     let mut mark: Option<String> = Option::None;
     let mut tag: String = "".to_string();
@@ -242,7 +238,7 @@ impl FileHandler for Fin {
             mark = Some(x.get(1).map_or("", |m| m.as_str()).to_string());
           },
           None => {
-            // not label, assume it is tag
+            // not mark, assume it is tag
             tag = token.to_string();
           },
         }
@@ -263,21 +259,6 @@ impl FileHandler for Fin {
     };
 
     item.entries.push(entry);
-
-    // ------
-    /*
-    let regex_item_entry: &regex::Regex = regex!(r"(?x)[+-]([0-9,]+)\ ([a-z]+$)");
-    let check_for_item_entry = regex_item_entry.captures(line.as_str());
-    match check_for_item_entry {
-      Some(x) => {
-        let value = x.get(1).map_or("", |m| m.as_str()).to_string();
-        let tag = x.get(2).map_or("", |m| m.as_str()).to_string();
-        println!("value {}, tag {}", value, tag);
-        // let entry = Entry {};
-      },
-      None => println!("{}", line),
-    }
-    */
   }
 
   fn read(&mut self) {
@@ -313,126 +294,9 @@ fn main() {
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  fn get_items() -> Vec<Item> {
-    // lines 11 to 15
-    let test1_line1 = Entry {
-      value: Some(10),
-      mark: Option::None,
-      tag: "hello1".to_string(),
-      line: 12,
-    };
-    let test1_line2 = Entry {
-      value: Option::None,
-      mark: Some("test2".to_string()),
-      tag: "hello2".to_string(),
-      line: 13,
-    };
-    let test1_line3 = Entry {
-      value: Some(10),
-      mark: Option::None,
-      tag: "hello3".to_string(),
-      line: 14,
-    };
-    let test1_result = Result {
-      line: 15,
-      value: Option::None,
-      label: "test1".to_string(),
-    };
-    let test1_item = Item {
-      title_line: 11,
-      title: "TEST ONE".to_string(),
-      entries: vec![test1_line1.clone(), test1_line2.clone(), test1_line3.clone()],
-      result: test1_result,
-      section: "1122".to_string(),
-    };
-    
-    // lines 16 to 20
-    let test2_line1 = Entry {
-      value: Some(10),
-      mark: Option::None,
-      tag: "hello1".to_string(),
-      line: 17,
-    };
-    let test2_line2 = Entry {
-      value: Some(10),
-      mark: Option::None,
-      tag: "hello2".to_string(),
-      line: 18,
-    };
-    let test2_line3 = Entry {
-      value: Some(-15),
-      mark: Option::None,
-      tag: "hello3".to_string(),
-      line: 19,
-    };
-    let test2_result = Result {
-      line: 20,
-      value: Option::None,
-      label: "test2".to_string(),
-    };
-    let test2_item = Item {
-      title_line: 16,
-      title: "TEST TWO".to_string(),
-      entries: vec![test2_line1.clone(), test2_line2.clone(), test2_line3.clone()],
-      result: test2_result,
-      section: "1122".to_string(),
-    };
-
-    // lines 20 to 25
-    let test3_line1 = Entry {
-      value: Some(10),
-      mark: Option::None,
-      tag: "hello1".to_string(),
-      line: 20,
-    };
-    let test3_line2 = Entry {
-      value: Some(10),
-      mark: Option::None,
-      tag: "hello2".to_string(),
-      line: 21,
-    };
-    let test3_line3 = Entry {
-      value: Option::None,
-      // mark: Some("test3".to_string()),
-      mark: Some("test2".to_string()),
-      tag: "hello3".to_string(),
-      line: 22,
-    };
-    let test3_line4 = Entry {
-      value: Option::None,
-      mark: Some("test2".to_string()),
-      tag: "hello4".to_string(),
-      line: 23,
-    };
-    let test3_line5 = Entry {
-      value: Option::None,
-      mark: Some("test1".to_string()),
-      tag: "hello5".to_string(),
-      line: 24,
-    };
-    let test3_result = Result {
-      line: 25,
-      value: Option::None,
-      label: "test3".to_string(),
-    };
-    let test3_item = Item {
-      title_line: 20,
-      title: "TEST THREE".to_string(),
-      entries: vec![test3_line1.clone(), test3_line2.clone(), test3_line3.clone(), test3_line4.clone(), test3_line5.clone()],
-      result: test3_result,
-      section: "1122".to_string(),
-    };
-
-    // return vec![test1_item, test2_item, test3_item];
-    return vec![test3_item, test2_item, test1_item];
-  }
-
   #[test]
   fn check3() {
-    // let all_items = get_items();
-    let all_items = vec![];
-    let mut fin = Fin::new(all_items);
+    let mut fin = Fin::new();
     println!("====");
     for item in fin.evaluated.iter() {
       println!("item is evaluated as {}", item.result.value.unwrap());
