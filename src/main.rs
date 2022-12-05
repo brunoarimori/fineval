@@ -13,8 +13,8 @@
 
 extern crate regex;
 extern crate once_cell;
-use std::fs::File;
-use std::io::{self, BufRead};
+use std::fs::{File, OpenOptions};
+use std::io::{self, Write, BufRead};
 // use std::path::Path;
 
 macro_rules! regex {
@@ -50,8 +50,10 @@ pub struct Result {
 
 pub struct Fin {
   current_section: Option<String>,
+  buffer_lines: Vec<String>,
   all_items: Vec<Item>,
   evaluated: Vec<Item>,
+  replace_lines: Vec<u32>,
 }
 
 pub trait Evaluator {
@@ -60,9 +62,25 @@ pub trait Evaluator {
   fn traverse(&mut self);
 }
 
+pub trait FileHandler {
+  fn read_pre_section(&mut self, line: String, state: &mut FileReaderState);
+  fn read_pre_item(&mut self, line: String, state: &mut FileReaderState, idx: usize);
+  fn read_pre_result(&mut self, line: String, state: &mut FileReaderState, idx: usize);
+  fn read(&mut self);
+
+  fn convert_value(value: i128) -> Option<String>;
+  fn write(&mut self);
+}
+
+pub enum FileReaderState {
+  PreSectionStart,
+  PreItemStart,
+  PreItemResult,
+}
+
 impl Evaluator for Fin {
   fn new() -> Self {
-    Fin { all_items: vec![], evaluated: vec![], current_section: Option::None }
+    Fin { all_items: vec![], evaluated: vec![], current_section: Option::None, buffer_lines: vec![], replace_lines: vec![] }
   }
 
   fn evaluate(item: &mut Item) {
@@ -116,28 +134,28 @@ impl Evaluator for Fin {
       }
       println!("RUN COMPLETED\n\n");
     }
+    /*
     // after all items evaluated, check values
     for item in self.all_items.iter() {
       println!("title {}", item.title);
       println!("result {}", item.result.value.unwrap());
     }
+
+    */
+    for item in self.evaluated.iter() {
+      for entry in item.entries.iter() {
+        println!("entry {}, line {}, value {}", entry.tag, entry.line, entry.value.unwrap_or(0));
+      }
+      println!("title {}, line {}", item.title, item.title_line);
+      println!("result {}, line {}", item.result.value.unwrap(), item.result.line);
+    }
+    println!("---");
+    for line in self.replace_lines.iter() {
+      println!("line to replace {}", line);
+    }
   }
 }
 
-pub trait FileHandler {
-  fn read_pre_section(&mut self, line: String, state: &mut FileReaderState);
-  fn read_pre_item(&mut self, line: String, state: &mut FileReaderState, idx: usize);
-  fn read_pre_result(&mut self, line: String, state: &mut FileReaderState, idx: usize);
-
-  fn read(&mut self);
-  fn write(&self);
-}
-
-pub enum FileReaderState {
-  PreSectionStart,
-  PreItemStart,
-  PreItemResult,
-}
 
 impl FileHandler for Fin {
   fn read_pre_section(&mut self, line: String, state: &mut FileReaderState) {
@@ -202,6 +220,8 @@ impl FileHandler for Fin {
         if idx == 1 {
           if token == "$".to_string() {
             item.result.value = Option::None;
+            // save line, we will need to replace it on write routine
+            self.replace_lines.push(item.result.line);
           } else {
             item.result.value = Some(token.replace(",", "").parse::<i128>().unwrap());
           }
@@ -226,6 +246,8 @@ impl FileHandler for Fin {
         println!("token: {}", token);
         if token == "$".to_string() {
           value = Option::None;
+          // save line, we will need to replace it on write routine
+          self.replace_lines.push(line_num);
           println!("value is None");
         } else {
           value = Some(token.replace(",", "").parse::<i128>().unwrap());
@@ -267,6 +289,8 @@ impl FileHandler for Fin {
     let mut state: FileReaderState = FileReaderState::PreSectionStart;
     for (idx, line) in lines.enumerate() {
       let line_unwrap = line.unwrap();
+      // save string for later write
+      self.buffer_lines.push(line_unwrap.clone());
       match state {
         FileReaderState::PreSectionStart => self.read_pre_section(line_unwrap, &mut state),
         FileReaderState::PreItemStart => self.read_pre_item(line_unwrap, &mut state, idx),
@@ -283,7 +307,43 @@ impl FileHandler for Fin {
       }
     }
   }
-  fn write(&self) {
+
+  fn convert_value(value: i128) -> Option<String> {
+    if value < 1000 { return Option::None; }
+    let mut res = String::new();
+    let value_str = value.to_string();
+    // reverse to ignore signal!
+    for (idx, val) in value_str.chars().rev().enumerate() {
+      if idx != 0 && idx % 3 == 0 { res.insert(0, ','); }
+      res.insert(0, val);
+    }
+    return Some(res);
+  }
+
+  fn write(&mut self) {
+    let mut file = OpenOptions::new().write(true).open("./fin.log").unwrap();
+    // read replace_lines
+    for line_no in self.replace_lines.iter() {
+      println!("line no {}", line_no);
+      // find entry or result
+      for item in self.evaluated.iter() {
+        if item.result.line == *line_no {
+          let val_str = Self::convert_value(item.result.value.unwrap()).unwrap_or(item.result.value.unwrap().to_string());
+          self.buffer_lines[*line_no as usize] = self.buffer_lines[*line_no as usize].replace("$", val_str.as_str());
+        }
+        for entry in item.entries.iter() {
+          if entry.line == *line_no {
+            let val_str = Self::convert_value(entry.value.unwrap()).unwrap_or(entry.value.unwrap().to_string());
+            self.buffer_lines[*line_no as usize] = self.buffer_lines[*line_no as usize].replace("$", val_str.as_str());
+          }
+        }
+      }
+    }
+    
+    // write
+    for str in self.buffer_lines.iter() {
+      writeln!(file, "{}", str).unwrap();
+    }
   }
 }
 
@@ -304,6 +364,8 @@ mod tests {
     println!("====");
     fin.read();
     fin.traverse();
+    println!("====");
+    fin.write();
   }
 }
 
