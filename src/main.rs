@@ -49,6 +49,7 @@ pub struct Result {
 }
 
 pub struct Fin {
+  file_path: String,
   current_section: Option<String>,
   buffer_lines: Vec<String>,
   all_items: Vec<Item>,
@@ -57,7 +58,7 @@ pub struct Fin {
 }
 
 pub trait Evaluator {
-  fn new() -> Self;
+  fn new(path: String) -> Self;
   fn evaluate(item: &mut Item);
   fn traverse(&mut self);
 }
@@ -79,8 +80,15 @@ pub enum FileReaderState {
 }
 
 impl Evaluator for Fin {
-  fn new() -> Self {
-    Fin { all_items: vec![], evaluated: vec![], current_section: Option::None, buffer_lines: vec![], replace_lines: vec![] }
+  fn new(path: String) -> Self {
+    Fin {
+      file_path: path,
+      all_items: vec![],
+      evaluated: vec![],
+      current_section: Option::None,
+      buffer_lines: vec![],
+      replace_lines: vec![]
+    }
   }
 
   fn evaluate(item: &mut Item) {
@@ -92,66 +100,35 @@ impl Evaluator for Fin {
   }
 
   fn traverse(&mut self) {
-    println!("\n\nSTARTING TRAVERSAL");
     while self.evaluated.len() < self.all_items.len() {
-      println!("[1] running evaluate, evaluated len {}", self.evaluated.len());
       for item in self.all_items.iter_mut() {
-        // check if already evaluated
-        let find = self.evaluated.iter().find(|&eval| eval.title_line == item.title_line);
-        if find.is_some() {
-          // item is already evaluated, skip
-          println!("item with title {} was already evaluated, skipping", item.title);
-          continue;
-        }
+        // check if already evaluated, by title_line and section
+        let find = self.evaluated.iter().find(|&eval| (eval.title_line == item.title_line) && (eval.section == item.section));
+        // item is already evaluated, skip
+        if find.is_some() { continue; }
         // item is not evaluated
         // check if it has deps
         let mut dep_count: usize = 0;
+        let item_section = item.section.clone();
         for entry in item.entries.iter_mut() {
           if entry.value.is_none() && entry.mark.is_some() {
             // item has dependecy, check if it is updatable
             let mark = entry.mark.as_ref().unwrap();
-            println!("on item {}, entry {}: checking evaluated for label {}", item.title, entry.tag, mark);
-            let find = self.evaluated.iter().find(|&eval| eval.result.label == mark.to_owned());
+            let find = self.evaluated.iter().find(|&eval| (eval.result.label == mark.to_owned()) && (eval.section == item_section));
             if find.is_none() {
-              println!("evaluated item not found for this dependency");
               dep_count += 1;
             } else {
-              println!("updating value for entry {}", entry.tag);
               entry.value = find.unwrap().result.value;
             }
           }
         }
-        if dep_count > 0 {
-          // item has deps, skip
-          println!("{} deps found in item with title {}, skipping", dep_count, item.title);
-          continue;
-        }
+        // item has deps, skip
+        if dep_count > 0 { continue; }
         // item is not evaluated and has no deps
-        println!("no deps found in item with title {}, evaluating...", item.title);
         // evaluate item and put it on evaluated vector
         Self::evaluate(item);
         self.evaluated.push(item.to_owned());
       }
-      println!("RUN COMPLETED\n\n");
-    }
-    /*
-    // after all items evaluated, check values
-    for item in self.all_items.iter() {
-      println!("title {}", item.title);
-      println!("result {}", item.result.value.unwrap());
-    }
-
-    */
-    for item in self.evaluated.iter() {
-      for entry in item.entries.iter() {
-        println!("entry {}, line {}, value {}", entry.tag, entry.line, entry.value.unwrap_or(0));
-      }
-      println!("title {}, line {}", item.title, item.title_line);
-      println!("result {}, line {}", item.result.value.unwrap(), item.result.line);
-    }
-    println!("---");
-    for line in self.replace_lines.iter() {
-      println!("line to replace {}", line);
     }
   }
 }
@@ -159,7 +136,6 @@ impl Evaluator for Fin {
 
 impl FileHandler for Fin {
   fn read_pre_section(&mut self, line: String, state: &mut FileReaderState) {
-    println!("on read section!!!");
     let regex_start: &regex::Regex = regex!(r"!([0-9a-z]+)>$");
     let check_for_section_start = regex_start.captures(line.as_str());
     match check_for_section_start {
@@ -167,15 +143,13 @@ impl FileHandler for Fin {
         self.current_section = Some(x.get(1).map_or("", |m| m.as_str()).to_string());
         *state = FileReaderState::PreItemStart;
       },
-      None => println!("{}", line),
+      None => {},
     }
   }
   fn read_pre_item(&mut self, line: String, state: &mut FileReaderState, idx: usize) {
-    println!("on read item!!!");
     // todo: check for section close
     let regex_close: &regex::Regex = regex!(r"!([0-9a-z]+)<$");
     if regex_close.is_match(line.as_str()) {
-      println!("line is closing!!!");
       *state = FileReaderState::PreSectionStart;
       return;
     }
@@ -200,15 +174,11 @@ impl FileHandler for Fin {
         self.all_items.push(item);
         *state = FileReaderState::PreItemResult;
       },
-      None => println!("{}", line),
+      None => {},
     }
   }
   fn read_pre_result(&mut self, line: String, state: &mut FileReaderState, idx: usize) {
-    println!("on wait result!!! {}", line);
-    if line.is_empty() {
-      println!("line is empty!!!! ");
-      return;
-    }
+    if line.is_empty() { return; }
 
     let item_idx = self.all_items.len() - 1;
     let item = self.all_items.get_mut(item_idx).unwrap();
@@ -227,7 +197,6 @@ impl FileHandler for Fin {
           }
           continue;
         }
-        println!("label: {}", token);
         item.result.label = token.to_string().replace("#", "");
       }
 
@@ -243,15 +212,12 @@ impl FileHandler for Fin {
     let regex_entry_mark = regex!(r"\[([a-z0-9]+)\]");
     for (idx, token) in line.split(" ").enumerate() {
       if idx == 0 {
-        println!("token: {}", token);
         if token == "$".to_string() {
           value = Option::None;
           // save line, we will need to replace it on write routine
           self.replace_lines.push(line_num);
-          println!("value is None");
         } else {
           value = Some(token.replace(",", "").parse::<i128>().unwrap());
-          println!("value parse: {}", value.unwrap());
         }
       } else {
         let check_for_entry_mark = regex_entry_mark.captures(token);
@@ -266,25 +232,17 @@ impl FileHandler for Fin {
         }
       }
     }
-    println!("---");
-    println!("value is {}", value.unwrap_or(0));
-    println!("mark is {}", mark.clone().unwrap_or("None".to_string()));
-    println!("tag is {}", tag);
-    println!("line is {}", line_num);
-    println!("---");
-
     let entry = Entry {
       value,
       mark,
       tag,
       line: line_num,
     };
-
     item.entries.push(entry);
   }
 
   fn read(&mut self) {
-    let file = File::open("./fin.log").unwrap();
+    let file = File::open(self.file_path.as_str()).unwrap();
     let lines = io::BufReader::new(file).lines();
     let mut state: FileReaderState = FileReaderState::PreSectionStart;
     for (idx, line) in lines.enumerate() {
@@ -295,15 +253,6 @@ impl FileHandler for Fin {
         FileReaderState::PreSectionStart => self.read_pre_section(line_unwrap, &mut state),
         FileReaderState::PreItemStart => self.read_pre_item(line_unwrap, &mut state, idx),
         FileReaderState::PreItemResult => self.read_pre_result(line_unwrap, &mut state, idx),
-      }
-    }
-    for item in self.all_items.iter() {
-      println!("section is {}", item.section);
-      println!("title is {}", item.title);
-      println!("title line is {}", item.title_line);
-      for entry in item.entries.iter() {
-        println!("  entry line is {}", entry.line);
-        println!("  entry value is {}", entry.value.unwrap_or(0));
       }
     }
   }
@@ -321,10 +270,9 @@ impl FileHandler for Fin {
   }
 
   fn write(&mut self) {
-    let mut file = OpenOptions::new().write(true).open("./fin.log").unwrap();
+    let mut file = OpenOptions::new().write(true).open(self.file_path.as_str()).unwrap();
     // read replace_lines
     for line_no in self.replace_lines.iter() {
-      println!("line no {}", line_no);
       // find entry or result
       for item in self.evaluated.iter() {
         if item.result.line == *line_no {
@@ -339,7 +287,6 @@ impl FileHandler for Fin {
         }
       }
     }
-    
     // write
     for str in self.buffer_lines.iter() {
       writeln!(file, "{}", str).unwrap();
@@ -348,7 +295,13 @@ impl FileHandler for Fin {
 }
 
 fn main() {
-  println!("Hello, world!");
+  let file_path = std::env::args().nth(1).unwrap_or("./fin.log".to_string());
+  let mut fin = Fin::new(file_path.clone());
+  println!("fineval: evaluating {}", file_path);
+  fin.read();
+  fin.traverse();
+  fin.write();
+  println!("fineval: evaluation done!");
 }
 
 #[cfg(test)]
@@ -356,7 +309,7 @@ mod tests {
   use super::*;
   #[test]
   fn check3() {
-    let mut fin = Fin::new();
+    let mut fin = Fin::new("./fin.log".to_string());
     println!("====");
     for item in fin.evaluated.iter() {
       println!("item is evaluated as {}", item.result.value.unwrap());
