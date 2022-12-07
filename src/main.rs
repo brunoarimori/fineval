@@ -69,7 +69,7 @@ pub trait FileHandler {
   fn read_pre_result(&mut self, line: String, state: &mut FileReaderState, idx: usize);
   fn read(&mut self);
 
-  fn convert_value(value: i128) -> Option<String>;
+  fn convert_value(value: i128) -> String;
   fn write(&mut self);
 }
 
@@ -257,16 +257,19 @@ impl FileHandler for Fin {
     }
   }
 
-  fn convert_value(value: i128) -> Option<String> {
-    if value < 1000 { return Option::None; }
-    let mut res = String::new();
-    let value_str = value.to_string();
-    // reverse to ignore signal!
-    for (idx, val) in value_str.chars().rev().enumerate() {
-      if idx != 0 && idx % 3 == 0 { res.insert(0, ','); }
-      res.insert(0, val);
+  fn convert_value(value: i128) -> String {
+    let mut res = value.abs().to_string();
+    if value > 1000 || value < -1000 {
+      let mut res_signal = String::new();
+      for (idx, val) in res.chars().rev().enumerate() {
+        if idx != 0 && idx % 3 == 0 { res_signal.insert(0, ','); }
+        res_signal.insert(0, val);
+      }
+      res = res_signal.clone();
     }
-    return Some(res);
+    if value > -1 { res.insert(0, '+'); }
+    else { res.insert(0, '-'); }
+    return res;
   }
 
   fn write(&mut self) {
@@ -276,12 +279,12 @@ impl FileHandler for Fin {
       // find entry or result
       for item in self.evaluated.iter() {
         if item.result.line == *line_no {
-          let val_str = Self::convert_value(item.result.value.unwrap()).unwrap_or(item.result.value.unwrap().to_string());
+          let val_str = Self::convert_value(item.result.value.unwrap());
           self.buffer_lines[*line_no as usize] = self.buffer_lines[*line_no as usize].replace("$", val_str.as_str());
         }
         for entry in item.entries.iter() {
           if entry.line == *line_no {
-            let val_str = Self::convert_value(entry.value.unwrap()).unwrap_or(entry.value.unwrap().to_string());
+            let val_str = Self::convert_value(entry.value.unwrap());
             self.buffer_lines[*line_no as usize] = self.buffer_lines[*line_no as usize].replace("$", val_str.as_str());
           }
         }
@@ -309,7 +312,8 @@ mod tests {
   use super::*;
   #[test]
   fn check3() {
-    let mut fin = Fin::new("./fin.log".to_string());
+    std::fs::copy("./fin.log", "./fin.log2").unwrap();
+    let mut fin = Fin::new("./fin.log2".to_string());
     println!("====");
     for item in fin.evaluated.iter() {
       println!("item is evaluated as {}", item.result.value.unwrap());
