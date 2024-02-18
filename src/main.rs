@@ -1,16 +1,3 @@
-// LINE
-//   value
-//   mark
-//   tag
-// RESULT
-//   value
-//   label
-// ITEM
-//   line_start
-//   title
-//   LINE[]
-//   RESULT
-
 extern crate regex;
 extern crate once_cell;
 use std::fs::{File, OpenOptions};
@@ -273,7 +260,7 @@ impl FileHandler for Fin {
   }
 
   fn write(&mut self) {
-    let mut file = OpenOptions::new().write(true).open(self.file_path.as_str()).unwrap();
+    let mut file = OpenOptions::new().write(true).truncate(true).open(self.file_path.as_str()).unwrap();
     // read replace_lines
     for line_no in self.replace_lines.iter() {
       // find entry or result
@@ -311,17 +298,12 @@ fn main() {
 mod tests {
   use super::*;
   #[test]
-  fn check3() {
-    std::fs::copy("./fin.log", "./fin.log2").unwrap();
-    let mut fin = Fin::new("./fin.log2".to_string());
-    println!("====");
-    for item in fin.evaluated.iter() {
-      println!("item is evaluated as {}", item.result.value.unwrap());
-    }
-    println!("====");
+  fn test() {
+    std::fs::remove_file("./test/fin-copy.log").unwrap_or_else(|_err| { println!("file removal failed") }) ;
+    std::fs::copy("./test/fin.log", "./test/fin-copy.log").unwrap();
+    let mut fin = Fin::new("./test/fin-copy.log".to_string());
     fin.read();
     fin.traverse();
-    println!("====");
     fin.write();
   }
 }

@@ -1,2 +1,3 @@
 target
 *.autosave
+test/fin-copy.log

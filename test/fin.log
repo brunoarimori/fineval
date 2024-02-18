@@ -1,0 +1,25 @@
+/* ---------------------------------
+* COMMENT TEST
+* ------------------------------- */
+
+!section>
+
+TEST ITEM ONE
+-100
+-100 tagexample 
++1300 tagexample
+= $ #item1
+
+TEST ITEM TWO
++300 tagexample 
+-200 tagexample 
+-1,000,000
+= $ #item2
+
+TEST ITEM THREE
+$ [item1]
+$ [item2] tagexample
++2,000,000 tagexample 
+= $ #item3
+
+!section<
